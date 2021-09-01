@@ -5,17 +5,18 @@ authors = ["EnormousCloud"]
 edition = "2018"
 
 [dependencies]
-async-std = { version = "1.6", features = [ "attributes" ] }
-structopt = { version = "0.3", default-features = false }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
 anyhow = { version = "1.0" }
-ureq = { version = "2.1", features = ["json", "charset"] }
+async-std = { version = "1.6", features = [ "attributes" ] }
+async-trait = { version = "0.1" }
 base64 = { version = "0.13" }
-tide = { version = "0.16", default-features = false, features = ["h1-server"] }
 bigdecimal = { version = "0.2" }
 cached = { version = "0.23" }
-async-trait = { version = "0.1" }
-tracing-subscriber = { version = "0.2" }
+ethereum-types = { version = "0.11" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+structopt = { version = "0.3", default-features = false }
+tide = { version = "0.16", default-features = false, features = ["h1-server"] }
 tracing = { version = "0.1" }
 tracing-futures =  { version = "0.2" }
+tracing-subscriber = { version = "0.2" }
+ureq = { version = "2.1", features = ["json", "charset"] }

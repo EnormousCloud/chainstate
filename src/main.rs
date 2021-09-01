@@ -5,6 +5,7 @@ pub mod telemetry;
 #[derive(Clone)]
 pub struct State {
     pub static_dir: String,
+    pub eth1: String,
 }
 
 // use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ async fn main() -> tide::Result<()> {
 
     let state = State {
         static_dir: args.static_dir.clone(),
+        eth1: args.eth1.clone(),
     };
     let mut app = tide::with_state(state);
     app.with(telemetry::TraceMiddleware::new());
