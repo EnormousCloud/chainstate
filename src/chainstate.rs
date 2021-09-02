@@ -1,6 +1,6 @@
 use crate::State;
 use cached::proc_macro::cached;
-use ethereum_types::{H160, U256};
+use ethereum_types::{H256, H160, U256};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tide::{Request, Response, Result};
@@ -28,6 +28,28 @@ pub struct EvmState {
 #[derive(Debug, Clone, Deserialize)]
 struct EvmNumericResult {
     pub result: U256,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all="camelCase")]
+struct RpcResponseBlockInfo {
+    base_fee_per_gas: U256,
+    difficulty: U256,
+    gas_limit: U256,
+    gas_used: U256,
+    hash: H256,
+    miner: H160,
+    number: U256,
+    size: U256,
+    timestamp: U256,
+    total_difficulty: U256,
+    transactions: Vec<H256>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RpcBatchResponse<T> {
+    pub id: String,    
+    pub result: T,
 }
 
 pub fn rpc_request(rpc_addr: &str) -> ureq::Request {
@@ -59,11 +81,19 @@ pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
     tracing::info!("eth_blockNumber batch request {}", payload);
     let rq = rpc_request(&rpc_addr);
     let response: String = rq.send_string(&payload).unwrap().into_string().unwrap();
-    tracing::info!("eth_blockNumber batch response {}", response);
+    
+    let batches: Vec<RpcBatchResponse<RpcResponseBlockInfo>> = match serde_json::from_str(&response) {
+        Ok(x) => x,
+        Err(e) => {
+            tracing::info!("eth_blockNumber batch response {}", response);
+            tracing::error!("parse error {}", e);
+            return None
+        }
+    };
+    tracing::info!("eth_blockNumber {:#?}", batches);
     
     // building batch to get the latest receipts
     // TODO: diff versions for openethereum and geth
-
     Some(EvmState{ blocks: vec![] })
 }
 
