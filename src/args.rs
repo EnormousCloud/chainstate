@@ -9,7 +9,7 @@ pub struct Args {
     #[structopt(
         long,
         default_value = "http://127.0.0.1:8545",
-        env = "ETHEREUM_RPC_ENDPOINT"
+        env = "RPC_ENDPOINT"
     )]
     pub eth1: String,
     #[structopt(long, default_value = "./dist", env = "STATIC_DIR")]
