@@ -6,20 +6,28 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tide::{Request, Response, Result};
 use ureq::{Agent, AgentBuilder};
+use std::str::FromStr;
+use hex_literal::hex;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmTx {
     pub txid: H256,
-    pub gas_used: u64,
-    pub gas_limit: u64,
-    pub class: String,
+    pub used: u64,
+    pub price: U256,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub class: Option<String>,
     pub status: u64,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub contract_address: Option<H160>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmBlock {
-    pub gas_used: u64,
-    pub gas_limit: u64,
+    pub block_num: u64,
+    pub block_hash: H256,
+    pub miner: H160,
+    pub used: u64,
+    pub limit: u64,
     pub tx: Vec<EvmTx>,
 }
 
@@ -94,7 +102,7 @@ pub fn rpc_request(rpc_addr: &str) -> ureq::Request {
 #[cached(time = 30)]
 pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
     let payload1 = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x{:x?}\",false],\"id\":\"i{}\"}}", block_num, block_num);
-    tracing::debug!("RQ {}", payload1);
+    // tracing::debug!("RQ {}", payload1);
     let rq1 = rpc_request(&rpc_addr);
     let response1: String = rq1.send_string(&payload1).unwrap().into_string().unwrap();
     let r1: RpcResponse<RpcResponseBlockInfo> = match serde_json::from_str(&response1) {
@@ -105,10 +113,10 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
             return None
         }
     };
-    println!("{:#?}", r1);
-
+    // println!("{:#?}", r1);
+    
     let payload2 = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"parity_getBlockReceipts\",\"params\":[\"0x{:x?}\"],\"id\":\"r{}\"}}", block_num, block_num);
-    tracing::debug!("RQ {}", payload2);
+    // tracing::debug!("RQ {}", payload2);
     let rq2 = rpc_request(&rpc_addr);
     let response2: String = rq2.send_string(&payload2).unwrap().into_string().unwrap();
     let r2: RpcResponse<Vec<RpcResponseBlockReceiptsInfo>> = match serde_json::from_str(&response2) {
@@ -119,12 +127,37 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
             return None
         }
     };
-    println!("{:#?}", r2);
-    let tx = vec![]; // TODO: map tx
-    
+    // println!("{:#?}", r2);
+    let mut tx = vec![]; // TODO: map tx
+    for receipt in r2.result {
+        let mut class = None;
+        if receipt.logs.len() > 1 && receipt.logs[0].data.len() > 32 {
+            let hex_str = hex::encode(&receipt.logs[0].data);
+            let u256_str: String = hex_str.chars().take(64).collect();
+            let topic = U256::from_str(&u256_str).unwrap();
+            if topic == hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into() {
+                class = Some("Transfer".to_owned());
+            }
+        }
+        if let Some(_) = receipt.contract_address {
+            class = Some("Publish".to_owned());
+        }
+        tx.push(EvmTx{
+            txid: receipt.transaction_hash,
+            used: receipt.gas_used.as_u64(),
+            price: receipt.effective_gas_price,
+            class,
+            status: receipt.status.as_u64(),
+            contract_address: receipt.contract_address,
+        })
+    }
+
     Some(EvmBlock{
-        gas_limit: r1.result.gas_limit.as_u64(),
-        gas_used: r1.result.gas_used.as_u64(),
+        block_num: r1.result.number.as_u64(),
+        block_hash: r1.result.hash,
+        miner: r1.result.miner,
+        limit: r1.result.gas_limit.as_u64(),
+        used: r1.result.gas_used.as_u64(),
         tx,
     })
 }
@@ -157,7 +190,7 @@ pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
 pub async fn get(req: Request<State>) -> Result {
     let mut res = Response::new(200);
     let rpc = req.state().eth1.clone();
-    let out = get_evm_state(rpc, 3);
+    let out = get_evm_state(rpc, 5);
 
     res.set_content_type("application/json");
     res.set_body(serde_json::to_string(&out).unwrap());

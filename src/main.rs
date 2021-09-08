@@ -28,10 +28,6 @@ async fn main() -> tide::Result<()> {
         static_dir: args.static_dir.clone(),
         eth1: args.eth1.clone(),
     };
-    let rpc = state.eth1.clone();
-    let _out = chainstate::get_evm_state(rpc, 3);
-
-
     let mut app = tide::with_state(state);
     app.with(telemetry::TraceMiddleware::new());
     // app.with(ServeMiddleware {});
