@@ -9,6 +9,9 @@ use tracing_subscriber::prelude::*;
 pub struct Args {
     #[structopt(long, default_value = "http://127.0.0.1:8545", env = "RPC_ENDPOINT")]
     pub network: String,
+    /// whether to start HTTP API server
+    #[structopt(short, long, default_value = "1")]
+    pub server: u32,
     #[structopt(short, long, default_value = "0.0.0.0:8000", env = "LISTEN")]
     pub addr: String,
 }
