@@ -111,6 +111,19 @@ pub fn rpc_request(rpc_addr: &str) -> ureq::Request {
     agent.post(rpc_addr).set("Content-Type", "application/json")
 }
 
+#[cached(time = 3000)]
+pub fn get_evm_chain_id(rpc_addr: String) -> std::result::Result<u64, &'static str> {
+    let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"id\":\"1\"}}");
+    let rq = rpc_request(&rpc_addr);
+    let response: String = rq.send_string(&payload).unwrap().into_string().unwrap();
+    let out: RpcResponse<serde_json::Value> = serde_json::from_str(&response).unwrap();
+    match out.result {
+        serde_json::Value::Number(n) => return Ok(n.as_u64().unwrap()),
+        serde_json::Value::String(s) => return Ok(s.parse().unwrap()),
+        _ => return Err("result convertion failure"),
+    }
+}
+
 #[cached(time = 30)]
 pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
     let payload1 = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x{:x?}\",false],\"id\":\"i{}\"}}", block_num, block_num);
@@ -181,7 +194,6 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
 pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
     let rq = rpc_request(&rpc_addr);
 
-    // TODO: add authorization headers
     let payload = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"id\":1}";
     let response: String = rq.send_string(payload).unwrap().into_string().unwrap();
     let numeric: EvmNumericResult = serde_json::from_str(&response).unwrap();
@@ -199,10 +211,7 @@ pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
             blocks.push(b)
         }
     }
-    Some(EvmState {
-        blocks,
-        chain_id: 0,
-    }) //, syncing: EvmSync::Done})
+    Some(EvmState { blocks }) //, syncing: EvmSync::Done})
 }
 
 pub async fn get(req: Request<State>) -> Result {
@@ -266,5 +275,11 @@ mod tests {
             }
             EvmSync::Done(_) => panic!("expected progress"),
         }
+    }
+
+    #[test]
+    pub fn it_reads_chain_id() {
+        let chain_id = get_evm_chain_id("https://dai.poa.network/".to_owned()).unwrap();
+        assert_eq!(chain_id, 100);
     }
 }
