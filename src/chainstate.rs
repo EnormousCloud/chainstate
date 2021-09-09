@@ -1,23 +1,23 @@
-use bytes::Bytes;
 use crate::State;
+use bytes::Bytes;
 use cached::proc_macro::cached;
-use ethereum_types::{H256, H160, U256};
+use ethereum_types::{H160, H256, U256, U64};
+use hex_literal::hex;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::time::Duration;
 use tide::{Request, Response, Result};
 use ureq::{Agent, AgentBuilder};
-use std::str::FromStr;
-use hex_literal::hex;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmTx {
     pub txid: H256,
     pub used: u64,
     pub price: U256,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
     pub status: u64,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_address: Option<H160>,
 }
 
@@ -31,6 +31,20 @@ pub struct EvmBlock {
     pub tx: Vec<EvmTx>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum EvmSync {
+    Progress {
+        #[serde(rename = "startingBlock")]
+        starting_block: U64,
+        #[serde(rename = "currentBlock")]
+        current_block: U64,
+        #[serde(rename = "highestBlock")]
+        highest_block: U64,
+    },
+    Done(bool),
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmState {
     pub blocks: Vec<EvmBlock>,
@@ -42,7 +56,7 @@ struct EvmNumericResult {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 struct RpcResponseBlockInfo {
     pub base_fee_per_gas: Option<U256>,
     pub difficulty: U256,
@@ -58,7 +72,7 @@ struct RpcResponseBlockInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiptLog {
     pub data: Bytes,
     pub log_index: U256,
@@ -68,7 +82,7 @@ pub struct ReceiptLog {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 struct RpcResponseBlockReceiptsInfo {
     pub block_hash: H256,
     pub block_number: U256,
@@ -86,7 +100,7 @@ struct RpcResponseBlockReceiptsInfo {
 
 #[derive(Debug, Clone, Deserialize)]
 struct RpcResponse<T> {
-    pub id: String,    
+    pub id: serde_json::Value,
     pub result: T,
 }
 
@@ -94,9 +108,7 @@ pub fn rpc_request(rpc_addr: &str) -> ureq::Request {
     let agent: Agent = AgentBuilder::new()
         .timeout_read(Duration::from_secs(25))
         .build();
-    agent
-        .post(rpc_addr)
-        .set("Content-Type", "application/json")
+    agent.post(rpc_addr).set("Content-Type", "application/json")
 }
 
 #[cached(time = 30)]
@@ -110,21 +122,22 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
         Err(e) => {
             tracing::info!("eth_getBlockByNumber response {}", response1);
             tracing::error!("parse error {}", e);
-            return None
+            return None;
         }
     };
     // println!("{:#?}", r1);
-    
+
     let payload2 = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"parity_getBlockReceipts\",\"params\":[\"0x{:x?}\"],\"id\":\"r{}\"}}", block_num, block_num);
     // tracing::debug!("RQ {}", payload2);
     let rq2 = rpc_request(&rpc_addr);
     let response2: String = rq2.send_string(&payload2).unwrap().into_string().unwrap();
-    let r2: RpcResponse<Vec<RpcResponseBlockReceiptsInfo>> = match serde_json::from_str(&response2) {
+    let r2: RpcResponse<Vec<RpcResponseBlockReceiptsInfo>> = match serde_json::from_str(&response2)
+    {
         Ok(x) => x,
         Err(e) => {
             tracing::info!("parity_getBlockReceipts response {}", response2);
             tracing::error!("parse error {}", e);
-            return None
+            return None;
         }
     };
     // println!("{:#?}", r2);
@@ -135,14 +148,16 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
             let hex_str = hex::encode(&receipt.logs[0].data);
             let u256_str: String = hex_str.chars().take(64).collect();
             let topic = U256::from_str(&u256_str).unwrap();
-            if topic == hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into() {
+            if topic
+                == hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into()
+            {
                 class = Some("Transfer".to_owned());
             }
         }
         if let Some(_) = receipt.contract_address {
             class = Some("Publish".to_owned());
         }
-        tx.push(EvmTx{
+        tx.push(EvmTx {
             txid: receipt.transaction_hash,
             used: receipt.gas_used.as_u64(),
             price: receipt.effective_gas_price,
@@ -152,7 +167,7 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
         })
     }
 
-    Some(EvmBlock{
+    Some(EvmBlock {
         block_num: r1.result.number.as_u64(),
         block_hash: r1.result.hash,
         miner: r1.result.miner,
@@ -166,14 +181,14 @@ pub fn get_evm_block(rpc_addr: String, block_num: u64) -> Option<EvmBlock> {
 pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
     let rq = rpc_request(&rpc_addr);
 
-    // TODO: add authorization headers 
+    // TODO: add authorization headers
     let payload = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"id\":1}";
     let response: String = rq.send_string(payload).unwrap().into_string().unwrap();
     let numeric: EvmNumericResult = serde_json::from_str(&response).unwrap();
     tracing::info!("eth_blockNumber={}", numeric.result.as_u64());
     if numeric.result == U256::from(0) {
         // node that is not in sync will return 0
-        return None
+        return None;
     }
 
     // building batch to get the latest blocks
@@ -183,8 +198,11 @@ pub fn get_evm_state(rpc_addr: String, num_blocks: usize) -> Option<EvmState> {
         if let Some(b) = get_evm_block(rpc_addr.clone(), block_num) {
             blocks.push(b)
         }
-    }   
-    Some(EvmState{ blocks })
+    }
+    Some(EvmState {
+        blocks,
+        chain_id: 0,
+    }) //, syncing: EvmSync::Done})
 }
 
 pub async fn get(req: Request<State>) -> Result {
@@ -195,4 +213,58 @@ pub async fn get(req: Request<State>) -> Result {
     res.set_content_type("application/json");
     res.set_body(serde_json::to_string(&out).unwrap());
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ethereum_types::U64;
+    use std::matches;
+
+    #[test]
+    pub fn it_parses_done() {
+        let input = r#"{"jsonrpc":"2.0","id":1,"result":false}"#;
+        let output: RpcResponse<EvmSync> = serde_json::from_str(&input).unwrap();
+        assert!(matches!(output.result, EvmSync::Done(false)));
+    }
+
+    #[test]
+    pub fn it_parses_geth_syncing() {
+        let input = r#"
+    {"jsonrpc":"2.0","id":1,"result":{"currentBlock":"0xceb358","highestBlock":"0xcf219e","knownStates":"0x0","pulledStates":"0x0","startingBlock":"0xceb358"}}
+    "#;
+        let output: RpcResponse<EvmSync> = serde_json::from_str(&input).unwrap();
+        match output.result {
+            EvmSync::Progress {
+                starting_block,
+                current_block,
+                highest_block,
+            } => {
+                assert_eq!(starting_block, U64::from(13546328));
+                assert_eq!(current_block, U64::from(13546328));
+                assert_eq!(highest_block, U64::from(13574558));
+            }
+            EvmSync::Done(_) => panic!("expected progress"),
+        }
+    }
+
+    #[test]
+    pub fn it_parses_openethereum_syncing() {
+        let input = r#"
+    {"jsonrpc":"2.0","result":{"currentBlock":"0xd1c504","highestBlock":"0x121534f","startingBlock":"0x0","warpChunksAmount":null,"warpChunksProcessed":null},"id":1}
+    "#;
+        let output: RpcResponse<EvmSync> = serde_json::from_str(&input).unwrap();
+        match output.result {
+            EvmSync::Progress {
+                starting_block,
+                current_block,
+                highest_block,
+            } => {
+                assert_eq!(starting_block, U64::from(0));
+                assert_eq!(current_block, U64::from(13747460));
+                assert_eq!(highest_block, U64::from(18961231));
+            }
+            EvmSync::Done(_) => panic!("expected progress"),
+        }
+    }
 }
