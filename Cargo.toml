@@ -22,4 +22,5 @@ tide = { version = "0.16", default-features = false, features = ["h1-server"] }
 tracing = { version = "0.1" }
 tracing-futures =  { version = "0.2" }
 tracing-subscriber = { version = "0.2" }
+rand = { version = "0.8" }
 ureq = { version = "2.1", features = ["json", "charset"] }
