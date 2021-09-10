@@ -45,6 +45,26 @@ pub enum EvmSync {
     Done(bool),
 }
 
+impl EvmSync {
+    pub fn to_string(&self) -> String {
+        match *self {
+            Self::Done(_) => "false".to_owned(),
+            Self::Progress {
+                current_block,
+                highest_block,
+                ..
+            } => {
+                format!(
+                    "{}% {} out of {}",
+                    current_block * 100 / highest_block,
+                    current_block,
+                    highest_block
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmState {
     pub blocks: Vec<EvmBlock>,
@@ -98,6 +118,24 @@ struct RpcResponseBlockReceiptsInfo {
     pub transaction_index: U256,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "level", content = "msg")]
+pub enum EvmStatus {
+    Ok(String),
+    Warn(String),
+    Fail(String),
+}
+
+impl EvmStatus {
+    pub fn log(&self) {
+        match self {
+            Self::Ok(msg) => tracing::info!("{}", msg),
+            Self::Warn(msg) => tracing::warn!("{}", msg),
+            Self::Fail(msg) => tracing::error!("{}", msg),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct RpcResponse<T> {
     pub id: serde_json::Value,
@@ -112,16 +150,63 @@ pub fn rpc_request(rpc_addr: &str) -> ureq::Request {
 }
 
 #[cached(time = 3000)]
-pub fn get_evm_chain_id(rpc_addr: String) -> std::result::Result<u64, &'static str> {
+pub fn get_evm_chain_id(rpc_addr: String) -> std::result::Result<u64, String> {
     let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"id\":\"1\"}}");
     let rq = rpc_request(&rpc_addr);
-    let response: String = rq.send_string(&payload).unwrap().into_string().unwrap();
+    let response: String = match rq.send_string(&payload) {
+        Ok(x) => x.into_string().unwrap(),
+        Err(e) => return Err(format!("{}", e)),
+    };
     let out: RpcResponse<serde_json::Value> = serde_json::from_str(&response).unwrap();
     match out.result {
         serde_json::Value::Number(n) => return Ok(n.as_u64().unwrap()),
         serde_json::Value::String(s) => return Ok(s.parse().unwrap()),
-        _ => return Err("result convertion failure"),
+        _ => return Err("result convertion failure".to_owned()),
     }
+}
+
+#[cached(time = 15)]
+pub fn get_evm_syncing(rpc_addr: String) -> std::result::Result<EvmSync, String> {
+    let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"eth_syncing\",\"id\":\"1\"}}");
+    let rq = rpc_request(&rpc_addr);
+    let response: String = match rq.send_string(&payload) {
+        Ok(x) => x.into_string().unwrap(),
+        Err(e) => return Err(format!("{}", e)),
+    };
+    let out: RpcResponse<EvmSync> = serde_json::from_str(&response).unwrap();
+    Ok(out.result)
+}
+
+#[cached(time = 5)]
+pub fn get_evm_block_number(rpc_addr: String) -> std::result::Result<u64, String> {
+    let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"id\":\"1\"}}");
+    let rq = rpc_request(&rpc_addr);
+    let response: String = match rq.send_string(&payload) {
+        Ok(x) => x.into_string().unwrap(),
+        Err(e) => return Err(format!("{}", e)),
+    };
+    let out: RpcResponse<U64> = serde_json::from_str(&response).unwrap();
+    Ok(out.result.as_u64())
+}
+
+pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
+    let chain_id = match get_evm_chain_id(rpc_addr.clone()) {
+        Ok(x) => x,
+        Err(err) => return EvmStatus::Fail(err.to_owned()),
+    };
+    match get_evm_syncing(rpc_addr.clone()) {
+        Ok(x) => {
+            if let EvmSync::Progress { .. } = x {
+                return EvmStatus::Ok(format!("chain {}, {}", chain_id, x.to_string()));
+            }
+        }
+        Err(err) => return EvmStatus::Fail(err.to_owned()),
+    };
+    let head_block = match get_evm_block_number(rpc_addr.clone()) {
+        Ok(x) => x,
+        Err(err) => return EvmStatus::Fail(err.to_owned()),
+    };
+    EvmStatus::Ok(format!("chain {}, block {}", chain_id, head_block))
 }
 
 #[cached(time = 30)]

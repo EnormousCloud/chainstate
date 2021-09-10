@@ -2,8 +2,6 @@ pub mod args;
 pub mod chainstate;
 pub mod telemetry;
 
-use tracing::{info, info_span};
-
 #[derive(Clone)]
 pub struct State {
     pub eth1: String,
@@ -29,8 +27,7 @@ async fn main() -> tide::Result<()> {
         app.listen(args.addr.as_str()).await?;
     } else {
         let network = args.network.clone();
-        let chain_id = crate::chainstate::get_evm_chain_id(network.clone()).unwrap();
-        info!("{}: {}", network, chain_id);
+        crate::chainstate::get_evm_status(network.clone()).log();
     }
     Ok(())
 }
