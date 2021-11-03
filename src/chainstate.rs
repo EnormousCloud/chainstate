@@ -134,6 +134,14 @@ impl EvmStatus {
             Self::Fail(msg) => tracing::error!("{}", msg),
         }
     }
+
+    pub fn log_with_address(&self, addr: &str) {
+        match self {
+            Self::Ok(msg) => tracing::info!("{}: {}", addr, msg),
+            Self::Warn(msg) => tracing::warn!("{}: {}", addr, msg),
+            Self::Fail(msg) => tracing::error!("{}: {}", addr, msg),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

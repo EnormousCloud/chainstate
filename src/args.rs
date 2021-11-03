@@ -7,6 +7,10 @@ use tracing_subscriber::prelude::*;
     about = "Enormous Cloud chainstate API server"
 )]
 pub struct Args {
+    /// Optional - plain text file, containing the list of RPC addresses to be checked
+    #[structopt(short, long, default_value = "", env = "NETWORKS_FILE")]
+    pub networks_file: String,
+    /// Single network address in case of missing networks-file
     #[structopt(long, default_value = "http://127.0.0.1:8545", env = "RPC_ENDPOINT")]
     pub network: String,
     /// whether to start HTTP API server
