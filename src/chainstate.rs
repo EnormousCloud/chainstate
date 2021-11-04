@@ -205,7 +205,7 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
     match get_evm_syncing(rpc_addr.clone()) {
         Ok(x) => {
             if let EvmSync::Progress { .. } = x {
-                return EvmStatus::Ok(format!("chain {}, {}", chain_id, x.to_string()));
+                return EvmStatus::Warn(format!("chain {}, {}", chain_id, x.to_string()));
             }
         }
         Err(err) => return EvmStatus::Fail(err.to_owned()),

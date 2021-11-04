@@ -38,7 +38,7 @@ pub fn parse() -> anyhow::Result<Args> {
         .init();
 
     let res = Args::from_args();
-    tracing::info!("{:?}", res);
+    tracing::debug!("{:?}", res);
     // todo: check static dir exists
     Ok(res)
 }
