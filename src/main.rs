@@ -40,9 +40,16 @@ async fn main() -> tide::Result<()> {
         app.at("/api/chainstate").get(chainstate::get);
         app.listen(args.addr.as_str()).await?;
     } else if args.networks_file.len() > 0 {
+        let mut threads = vec![];
         for network in read_networks(&args.networks_file).unwrap() {
             // for each network spawn a thread that logs its status
-            crate::chainstate::get_evm_status(network.clone()).log_with_address(&network);
+            threads.push(std::thread::spawn(move || {
+                crate::chainstate::get_evm_status(network.clone()).log_with_address(&network);
+            }));
+        }
+        // wait for result
+        for t in threads {
+            let _ = t.join();
         }
     } else {
         let network = args.network.clone();

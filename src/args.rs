@@ -27,8 +27,7 @@ pub fn parse() -> anyhow::Result<Args> {
         // .without_time()
         // .with_ansi(false)
         // .with_level(false)
-        // .with_target(false)
-    ;
+        .with_target(false);
     let filter_layer = tracing_subscriber::EnvFilter::try_from_default_env()
         .or_else(|_| tracing_subscriber::EnvFilter::try_new(&log_level))
         .unwrap();
@@ -39,6 +38,5 @@ pub fn parse() -> anyhow::Result<Args> {
 
     let res = Args::from_args();
     tracing::debug!("{:?}", res);
-    // todo: check static dir exists
     Ok(res)
 }
