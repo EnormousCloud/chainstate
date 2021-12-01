@@ -118,6 +118,31 @@ struct RpcResponseBlockReceiptsInfo {
     pub transaction_index: U256,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct RpcError {
+    pub code: i32,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RpcErrorResponse {
+    pub id: serde_json::Value,
+    pub error: RpcError,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BlockGaps {
+    #[serde(rename="blockGap")]
+    pub block_gap: Vec<U256>,
+}
+
+impl BlockGaps {
+    pub fn to_string(&self) -> String {
+        let s: Vec<String> = self.block_gap.iter().map(|x| format!("{}", x)).collect();
+        s.join("..")
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "level", content = "msg")]
 pub enum EvmStatus {
@@ -197,6 +222,21 @@ pub fn get_evm_block_number(rpc_addr: String) -> std::result::Result<u64, String
     Ok(out.result.as_u64())
 }
 
+#[cached(time = 5)]
+pub fn get_evm_gaps(rpc_addr: String) -> std::result::Result<BlockGaps, String> {
+    let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"parity_chainStatus\",\"id\":\"1\",\"params\":[]}}");
+    let rq = rpc_request(&rpc_addr);
+    let response: String = match rq.send_string(&payload) {
+        Ok(x) => x.into_string().unwrap(),
+        Err(e) => return Err(format!("{}", e)),
+    };
+    if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
+        return Err(err.error.message.clone());
+    }
+    let out: RpcResponse<BlockGaps> = serde_json::from_str(&response).unwrap();
+    Ok(out.result)
+}
+
 pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
     let chain_id = match get_evm_chain_id(rpc_addr.clone()) {
         Ok(x) => x,
@@ -214,7 +254,13 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
         Ok(x) => x,
         Err(err) => return EvmStatus::Fail(err.to_owned()),
     };
-    EvmStatus::Ok(format!("chain {}, block {}", chain_id, head_block))
+    EvmStatus::Ok(match get_evm_gaps(rpc_addr.clone()) {
+        Ok(x) => format!("chain {}, block {}, gaps {}", chain_id, head_block, x.to_string()),
+        Err(_) => {
+            // tracing::error!("parse error {}", err);
+            format!("chain {}, block {}", chain_id, head_block)
+        },
+    })
 }
 
 #[cached(time = 30)]
