@@ -132,7 +132,7 @@ struct RpcErrorResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BlockGaps {
-    #[serde(rename="blockGap")]
+    #[serde(rename = "blockGap")]
     pub block_gap: Vec<U256>,
 }
 
@@ -190,7 +190,13 @@ pub fn get_evm_chain_id(rpc_addr: String) -> std::result::Result<u64, String> {
         Ok(x) => x.into_string().unwrap(),
         Err(e) => return Err(format!("{}", e)),
     };
-    let out: RpcResponse<serde_json::Value> = serde_json::from_str(&response).unwrap();
+    if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
+        return Err(err.error.message.clone());
+    }
+    let out: RpcResponse<serde_json::Value> = match serde_json::from_str(&response) {
+        Ok(x) => x,
+        Err(x) => return Err(x.to_string()),
+    };
     match out.result {
         serde_json::Value::Number(n) => return Ok(n.as_u64().unwrap()),
         serde_json::Value::String(s) => return Ok(s.parse().unwrap()),
@@ -206,7 +212,13 @@ pub fn get_evm_syncing(rpc_addr: String) -> std::result::Result<EvmSync, String>
         Ok(x) => x.into_string().unwrap(),
         Err(e) => return Err(format!("{}", e)),
     };
-    let out: RpcResponse<EvmSync> = serde_json::from_str(&response).unwrap();
+    if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
+        return Err(err.error.message.clone());
+    }
+    let out: RpcResponse<EvmSync> = match serde_json::from_str(&response) {
+        Ok(x) => x,
+        Err(x) => return Err(format!("{}. RESPONSE: {}", x.to_string(), response)),
+    };
     Ok(out.result)
 }
 
@@ -218,13 +230,21 @@ pub fn get_evm_block_number(rpc_addr: String) -> std::result::Result<u64, String
         Ok(x) => x.into_string().unwrap(),
         Err(e) => return Err(format!("{}", e)),
     };
-    let out: RpcResponse<U64> = serde_json::from_str(&response).unwrap();
+    if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
+        return Err(err.error.message.clone());
+    }
+    let out: RpcResponse<U64> = match serde_json::from_str(&response) {
+        Ok(x) => x,
+        Err(x) => return Err(format!("{}. RESPONSE: {}", x.to_string(), response)),
+    };
     Ok(out.result.as_u64())
 }
 
 #[cached(time = 5)]
 pub fn get_evm_gaps(rpc_addr: String) -> std::result::Result<BlockGaps, String> {
-    let payload = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"parity_chainStatus\",\"id\":\"1\",\"params\":[]}}");
+    let payload = format!(
+        "{{\"jsonrpc\":\"2.0\",\"method\":\"parity_chainStatus\",\"id\":\"1\",\"params\":[]}}"
+    );
     let rq = rpc_request(&rpc_addr);
     let response: String = match rq.send_string(&payload) {
         Ok(x) => x.into_string().unwrap(),
@@ -233,7 +253,10 @@ pub fn get_evm_gaps(rpc_addr: String) -> std::result::Result<BlockGaps, String> 
     if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
         return Err(err.error.message.clone());
     }
-    let out: RpcResponse<BlockGaps> = serde_json::from_str(&response).unwrap();
+    let out: RpcResponse<BlockGaps> = match serde_json::from_str(&response) {
+        Ok(x) => x,
+        Err(x) => return Err(format!("{}. RESPONSE: {}", x.to_string(), response)),
+    };
     Ok(out.result)
 }
 
@@ -255,11 +278,16 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
         Err(err) => return EvmStatus::Fail(err.to_owned()),
     };
     EvmStatus::Ok(match get_evm_gaps(rpc_addr.clone()) {
-        Ok(x) => format!("chain {}, block {}, gaps {}", chain_id, head_block, x.to_string()),
+        Ok(x) => format!(
+            "chain {}, block {}, gaps {}",
+            chain_id,
+            head_block,
+            x.to_string()
+        ),
         Err(_) => {
             // tracing::error!("parse error {}", err);
             format!("chain {}, block {}", chain_id, head_block)
-        },
+        }
     })
 }
 
