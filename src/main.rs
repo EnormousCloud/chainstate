@@ -1,24 +1,11 @@
 pub mod args;
 pub mod chainstate;
+pub mod network;
 pub mod telemetry;
 
 #[derive(Clone)]
 pub struct State {
     pub eth1: String,
-}
-
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
-
-pub fn read_networks(source: &str) -> Result<Vec<String>, &str> {
-    let file = File::open(Path::new(source)).unwrap();
-    let lines: Vec<String> = io::BufReader::new(file)
-        .lines()
-        .map(|row| row.unwrap())
-        .filter(|row| row.len() > 0)
-        .collect();
-    Ok(lines)
 }
 
 #[async_std::main]
@@ -41,10 +28,11 @@ async fn main() -> tide::Result<()> {
         app.listen(args.addr.as_str()).await?;
     } else if args.networks_file.len() > 0 {
         let mut threads = vec![];
-        for network in read_networks(&args.networks_file).unwrap() {
+        for network in network::from_file(&args.networks_file).unwrap() {
             // for each network spawn a thread that logs its status
             threads.push(std::thread::spawn(move || {
-                crate::chainstate::get_evm_status(network.clone()).log_with_address(&network);
+                let addr = network.endpoint.clone();
+                crate::chainstate::get_evm_status(addr.clone()).log_with_address(&addr);
             }));
         }
         // wait for result
