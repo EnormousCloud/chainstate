@@ -271,7 +271,13 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
                 return EvmStatus::Warn(format!("chain {}, {}", chain_id, x.to_string()));
             }
         }
-        Err(err) => return EvmStatus::Fail(err.to_owned()),
+        Err(err) => {
+            let msg = err.to_owned();
+            // Some RPC APIs (i.e. arbitrum) don't havethis method - and we will allow that
+            if !msg.contains("method eth_syncing") {
+                return EvmStatus::Fail(msg);
+            }
+        },
     };
     let head_block = match get_evm_block_number(rpc_addr.clone()) {
         Ok(x) => x,
