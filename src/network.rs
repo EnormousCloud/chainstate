@@ -31,3 +31,21 @@ pub fn from_file(source: &str) -> anyhow::Result<Vec<Network>> {
     let file = File::open(Path::new(source)).unwrap();
     return from_reader(io::BufReader::new(file));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn it_reads_plain() {
+        let input = r#"
+        http://test.com
+        https://test2.com
+        "#;
+        let cursor = io::Cursor::new(input.as_bytes());
+        let output = from_reader(cursor).unwrap();
+        assert_eq!(output.len(), 2);
+        assert_eq!(output[0].endpoint, "http://test.com");
+        assert_eq!(output[1].endpoint, "https://test2.com");
+    }
+}
