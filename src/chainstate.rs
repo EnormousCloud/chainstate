@@ -273,7 +273,7 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
         }
         Err(err) => {
             let msg = err.to_owned();
-            // Some RPC APIs (i.e. arbitrum) don't havethis method - and we will allow that
+            // Some RPC APIs (i.e. arbitrum) don't have this method - and we will allow that
             if !msg.contains("method eth_syncing") {
                 return EvmStatus::Fail(msg);
             }
@@ -291,6 +291,9 @@ pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
             x.to_string()
         ),
         Err(_) => {
+            if head_block == 0 {
+                return EvmStatus::Warn(format!("chain {}, zero head block", chain_id));
+            }
             // tracing::error!("parse error {}", err);
             format!("chain {}, block {}", chain_id, head_block)
         }
