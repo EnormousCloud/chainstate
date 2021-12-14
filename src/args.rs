@@ -7,18 +7,23 @@ use tracing_subscriber::prelude::*;
     about = "Enormous Cloud chainstate API server"
 )]
 pub struct Args {
-    /// Optional - plain text file, containing the list of RPC addresses to be checked
+    /// Optional - plain text file, containing the list of RPC addresses to be checked.
+    /// Tag may be appled to restrict the list
     #[structopt(short, long, default_value = "", env = "NETWORKS_FILE")]
     pub networks_file: String,
-    /// filter chains by tag. Internally used: nosync, nogaps
+    /// Filter chains by tag. Tags that are internally used: nosync, nogaps
     #[structopt(short, long, default_value = "")]
     pub tag: String,
-    /// Single network address in case of missing networks-file
+    /// Check single network address (tag may be appled)
     #[structopt(long, default_value = "")]
     pub network: String,
-    /// whether to start HTTP API server
+    /// Return working endpoint (tag may be applied to restrict the list)
+    #[structopt(long)]
+    pub endpoints: bool,
+    /// Whether to start HTTP API server
     #[structopt(short, long, default_value = "0")]
     pub server: u32,
+    /// In case of server, TCP address to be listened
     #[structopt(short, long, default_value = "0.0.0.0:8000", env = "LISTEN")]
     pub addr: String,
 }
