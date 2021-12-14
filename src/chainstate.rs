@@ -4,6 +4,7 @@ use cached::proc_macro::cached;
 use ethereum_types::{H160, H256, U256, U64};
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::time::Duration;
 use tide::{Request, Response, Result};
@@ -260,44 +261,45 @@ pub fn get_evm_gaps(rpc_addr: String) -> std::result::Result<BlockGaps, String> 
     Ok(out.result)
 }
 
-pub fn get_evm_status(rpc_addr: String) -> EvmStatus {
+pub fn get_evm_status(rpc_addr: String, tags: &HashSet<String>) -> EvmStatus {
     let chain_id = match get_evm_chain_id(rpc_addr.clone()) {
         Ok(x) => x,
         Err(err) => return EvmStatus::Fail(err.to_owned()),
     };
-    match get_evm_syncing(rpc_addr.clone()) {
-        Ok(x) => {
-            if let EvmSync::Progress { .. } = x {
-                return EvmStatus::Warn(format!("chain {}, {}", chain_id, x.to_string()));
+    if !tags.contains("nosync") {
+        match get_evm_syncing(rpc_addr.clone()) {
+            Ok(x) => {
+                if let EvmSync::Progress { .. } = x {
+                    return EvmStatus::Warn(format!("chain {}, {}", chain_id, x.to_string()));
+                }
             }
-        }
-        Err(err) => {
-            let msg = err.to_owned();
-            // Some RPC APIs (i.e. arbitrum) don't have this method - and we will allow that
-            if !msg.contains("method eth_syncing") {
-                return EvmStatus::Fail(msg);
-            }
-        },
-    };
+            Err(err) => {
+                let msg = err.to_owned();
+                // Some RPC APIs (i.e. arbitrum) don't have this method - and we will allow that
+                if !msg.contains("method eth_syncing") {
+                    return EvmStatus::Fail(msg);
+                }
+            },
+        };
+    }
     let head_block = match get_evm_block_number(rpc_addr.clone()) {
         Ok(x) => x,
         Err(err) => return EvmStatus::Fail(err.to_owned()),
     };
-    EvmStatus::Ok(match get_evm_gaps(rpc_addr.clone()) {
-        Ok(x) => format!(
-            "chain {}, block {}, gaps {}",
-            chain_id,
-            head_block,
-            x.to_string()
-        ),
-        Err(_) => {
-            if head_block == 0 {
-                return EvmStatus::Warn(format!("chain {}, zero head block", chain_id));
-            }
-            // tracing::error!("parse error {}", err);
-            format!("chain {}, block {}", chain_id, head_block)
+    if !tags.contains("nogaps") {
+        if let Ok(x) = get_evm_gaps(rpc_addr.clone()) {
+            return EvmStatus::Ok(format!(
+                "chain {}, block {}, gaps {}",
+                chain_id,
+                head_block,
+                x.to_string(),
+            ));
         }
-    })
+    }
+    if head_block == 0 {
+        return EvmStatus::Warn(format!("chain {}, zero head block", chain_id));
+    }
+    EvmStatus::Ok(format!("chain {}, block {}", chain_id, head_block))
 }
 
 #[cached(time = 30)]

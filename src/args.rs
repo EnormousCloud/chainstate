@@ -10,7 +10,7 @@ pub struct Args {
     /// Optional - plain text file, containing the list of RPC addresses to be checked
     #[structopt(short, long, default_value = "", env = "NETWORKS_FILE")]
     pub networks_file: String,
-    /// filter chains by tag
+    /// filter chains by tag. Internally used: nosync, nogaps
     #[structopt(short, long, default_value = "")]
     pub tag: String,
     /// Single network address in case of missing networks-file
