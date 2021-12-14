@@ -14,10 +14,12 @@ pub struct State {
 
 pub fn tags_from_args(tags_str: &str) -> HashSet<String> {
     let mut tags: HashSet<String> = HashSet::new();
-    let parts: Vec<&str> = tags_str.split(",").collect();
+    let parts: Vec<&str> = tags_str.trim().split(",").collect();
     if parts.len() > 0 {
         for part in parts {
-            tags.insert(part.trim().to_string());
+            if part.trim().len() > 0 {
+                tags.insert(part.trim().to_string());
+            }
         }
     }
     tags
@@ -34,16 +36,16 @@ async fn main() -> tide::Result<()> {
 
     if args.endpoints {
         // show working endpoints in plain text format
-        let atag = Arc::new(args.tag.clone());
+        let arc_tags = Arc::new(tags_from_args(&args.tag));
         let mut threads = vec![];
         let matches: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
         for network in network::from_file(&args.networks_file).unwrap() {
-            let tag = Arc::clone(&atag);
+            let tag = Arc::clone(&arc_tags);
             let amatches = Arc::clone(&matches);
             // for each network spawn a thread that logs its status
             threads.push(std::thread::spawn(move || {
-                let addr = network.endpoint.clone();
-                if tag.len() == 0 || network.tags.contains(&tag.to_string()) {
+                if network.has_all(&tag) {
+                    let addr = network.endpoint.clone();
                     if let EvmStatus::Ok(_) = get_evm_status(addr.clone(), &network.tags) {
                         let mut m = amatches.lock().unwrap();
                         m.push(addr.clone());
@@ -61,19 +63,30 @@ async fn main() -> tide::Result<()> {
             println!("{}", l);
         }
         return Ok(());
-    } else if args.network.len() > 0 {
+    }
+
+    if args.network.len() > 0 {
         let network = args.network.clone();
         let tags = tags_from_args(&args.tag);
         get_evm_status(network.clone(), &tags).log();
-    } else if args.networks_file.len() > 0 {
-        let atag = Arc::new(args.tag.clone());
+        return Ok(());
+    }
+
+    if args.networks_file.len() > 0 {
+        let arc_tag = Arc::new(tags_from_args(&args.tag));
         let mut threads = vec![];
         for network in network::from_file(&args.networks_file).unwrap() {
-            let tag = Arc::clone(&atag);
+            let tags = Arc::clone(&arc_tag);
             // for each network spawn a thread that logs its status
             threads.push(std::thread::spawn(move || {
-                let addr = network.endpoint.clone();
-                if tag.len() == 0 || network.tags.contains(&tag.to_string()) {
+                println!(
+                    "network = {} {:?} -> {:?}",
+                    network.endpoint,
+                    tags,
+                    network.has_all(&tags),
+                );
+                if network.has_all(&tags) {
+                    let addr = network.endpoint.clone();
                     get_evm_status(addr.clone(), &network.tags).log_with_address(&addr);
                 }
             }));
@@ -82,9 +95,10 @@ async fn main() -> tide::Result<()> {
         for t in threads {
             let _ = t.join();
         }
+        return Ok(());
     }
 
-    if args.server > 0 {
+    if args.server {
         let state = State {
             eth1: args.network.clone(),
         };

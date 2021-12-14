@@ -17,6 +17,16 @@ impl Network {
             tags: tags.clone(),
         }
     }
+    pub fn has_all(&self, tags: &HashSet<String>) -> bool {
+        if tags.len() > 0 {
+            for t in tags {
+                if !self.tags.contains(t) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }
 
 pub fn from_reader(reader: impl BufRead) -> anyhow::Result<Vec<Network>> {
