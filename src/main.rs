@@ -3,6 +3,7 @@ pub mod chainstate;
 pub mod network;
 pub mod telemetry;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -36,7 +37,8 @@ async fn main() -> tide::Result<()> {
             threads.push(std::thread::spawn(move || {
                 let addr = network.endpoint.clone();
                 if tag.len() == 0 || network.tags.contains(&tag.to_string()) {
-                    crate::chainstate::get_evm_status(addr.clone()).log_with_address(&addr);
+                    crate::chainstate::get_evm_status(addr.clone(), &network.tags)
+                        .log_with_address(&addr);
                 }
             }));
         }
@@ -46,7 +48,14 @@ async fn main() -> tide::Result<()> {
         }
     } else {
         let network = args.network.clone();
-        crate::chainstate::get_evm_status(network.clone()).log();
+        let mut tags: HashSet<String> = HashSet::new();
+        let parts: Vec<&str> = args.tag.split(",").collect();
+        if parts.len() > 0 {
+            for part in parts {
+                tags.insert(part.trim().to_string());
+            }
+        }
+        crate::chainstate::get_evm_status(network.clone(), &tags).log();
     }
     Ok(())
 }
