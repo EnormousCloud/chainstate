@@ -79,12 +79,6 @@ async fn main() -> tide::Result<()> {
             let tags = Arc::clone(&arc_tag);
             // for each network spawn a thread that logs its status
             threads.push(std::thread::spawn(move || {
-                println!(
-                    "network = {} {:?} -> {:?}",
-                    network.endpoint,
-                    tags,
-                    network.has_all(&tags),
-                );
                 if network.has_all(&tags) {
                     let addr = network.endpoint.clone();
                     get_evm_status(addr.clone(), &network.tags).log_with_address(&addr);

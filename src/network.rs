@@ -10,6 +10,28 @@ pub struct Network {
     pub endpoint: String,
 }
 
+#[derive(Debug, Clone)]
+pub enum TagMatcher {
+    Has(String),
+    DoesntHave(String),
+}
+
+impl TagMatcher {
+    pub fn from(src: &str) -> Option<Self> {
+        if src.len() == 0 {
+            return None;
+        }
+        if src.len() > 1 {
+            let first_ch: String = src.chars().take(1).collect();
+            if first_ch == "-" {
+                let res = src.chars().skip(1).collect();
+                return Some(Self::DoesntHave(res));
+            }
+        }
+        Some(Self::Has(src.to_string()))
+    }
+}
+
 impl Network {
     pub fn new(endpoint: &str, tags: HashSet<String>) -> Self {
         Self {
@@ -20,8 +42,13 @@ impl Network {
     pub fn has_all(&self, tags: &HashSet<String>) -> bool {
         if tags.len() > 0 {
             for t in tags {
-                if !self.tags.contains(t) {
-                    return false;
+                if let Some(tm) = TagMatcher::from(&t) {
+                    if match tm {
+                        TagMatcher::Has(x) => !self.tags.contains(&x),
+                        TagMatcher::DoesntHave(x) => self.tags.contains(&x),
+                    } {
+                        return false;
+                    }
                 }
             }
         }
