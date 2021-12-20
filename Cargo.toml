@@ -3,6 +3,11 @@ name = "chainstate"
 version = "0.1.0"
 authors = ["EnormousCloud"]
 edition = "2018"
+license = "MIT"
+repository = "https://github.com/EnormousCloud/chainstate/"
+homepage = "https://github.com/EnormousCloud/chainstate/"
+description = "CLI utility to examine the health of EVM-compatible nodes via JSON-RPC API"
+readme = "README.md"
 
 [dependencies]
 anyhow = { version = "1.0" }

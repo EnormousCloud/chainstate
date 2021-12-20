@@ -1,6 +1,10 @@
 # chainstate
 
-Chainstate is a CLI utility to examine the health of EVM-compatible nodes via JSON-RPC api
+Chainstate is a CLI utility to examine the health of EVM-compatible nodes via JSON-RPC API
+
+## Installation
+
+```cargo install -g chainstate```
 
 ## Usage
 ```
