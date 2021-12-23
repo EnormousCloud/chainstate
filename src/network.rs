@@ -129,4 +129,31 @@ mod tests {
         tags3.insert("no test".to_string());
         assert_eq!(output[2].tags, tags3);
     }
+
+    #[test]
+    pub fn it_matches_tags() {
+        let mut tags = HashSet::new();
+        tags.insert("one".to_string());
+        tags.insert("two".to_string());
+        let n = Network::new("test", tags.clone());
+        assert_eq!(n.has_all(&tags), true);
+
+        let mut t2 = tags.clone();
+        t2.remove("two");
+        let n2 = Network::new("test", t2.clone());
+        assert_eq!(n2.has_all(&tags), false);
+    }
+
+    #[test]
+    pub fn it_matches_tags_with_exclusion() {
+        let mut tags = HashSet::new();
+        tags.insert("one".to_string());
+        tags.insert("two".to_string());
+        let n = Network::new("test", tags.clone());
+
+        let mut t = HashSet::new();
+        t.insert("one".to_string());
+        t.insert("-three".to_string());
+        assert_eq!(n.has_all(&t), true);
+    }
 }
