@@ -78,7 +78,7 @@ struct EvmNumericResult {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcResponseBlockInfo {
+pub struct RpcResponseBlockInfo {
     pub base_fee_per_gas: Option<U256>,
     pub difficulty: U256,
     pub gas_limit: U256,
@@ -104,7 +104,7 @@ pub struct ReceiptLog {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcResponseBlockReceiptsInfo {
+pub struct RpcResponseBlockReceiptsInfo {
     pub block_hash: H256,
     pub block_number: U256,
     pub contract_address: Option<H160>,
@@ -120,13 +120,13 @@ struct RpcResponseBlockReceiptsInfo {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RpcError {
+pub struct RpcError {
     pub code: i32,
     pub message: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RpcErrorResponse {
+pub struct RpcErrorResponse {
     pub id: serde_json::Value,
     pub error: RpcError,
 }
@@ -171,7 +171,7 @@ impl EvmStatus {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RpcResponse<T> {
+pub struct RpcResponse<T> {
     pub id: serde_json::Value,
     pub result: T,
 }
@@ -241,26 +241,6 @@ pub fn get_evm_block_number(rpc_addr: String) -> std::result::Result<u64, String
     Ok(out.result.as_u64())
 }
 
-#[cached(time = 5)]
-pub fn get_evm_gaps(rpc_addr: String) -> std::result::Result<BlockGaps, String> {
-    let payload = format!(
-        "{{\"jsonrpc\":\"2.0\",\"method\":\"parity_chainStatus\",\"id\":\"1\",\"params\":[]}}"
-    );
-    let rq = rpc_request(&rpc_addr);
-    let response: String = match rq.send_string(&payload) {
-        Ok(x) => x.into_string().unwrap(),
-        Err(e) => return Err(format!("{}", e)),
-    };
-    if let Ok(err) = serde_json::from_str::<RpcErrorResponse>(&response) {
-        return Err(err.error.message.clone());
-    }
-    let out: RpcResponse<BlockGaps> = match serde_json::from_str(&response) {
-        Ok(x) => x,
-        Err(x) => return Err(format!("{}. RESPONSE: {}", x.to_string(), response)),
-    };
-    Ok(out.result)
-}
-
 pub fn get_evm_status(rpc_addr: String, tags: &HashSet<String>) -> EvmStatus {
     let chain_id = match get_evm_chain_id(rpc_addr.clone()) {
         Ok(x) => x,
@@ -279,23 +259,13 @@ pub fn get_evm_status(rpc_addr: String, tags: &HashSet<String>) -> EvmStatus {
                 if !msg.contains("method eth_syncing") {
                     return EvmStatus::Fail(msg);
                 }
-            },
+            }
         };
     }
     let head_block = match get_evm_block_number(rpc_addr.clone()) {
         Ok(x) => x,
         Err(err) => return EvmStatus::Fail(err.to_owned()),
     };
-    if !tags.contains("nogaps") {
-        if let Ok(x) = get_evm_gaps(rpc_addr.clone()) {
-            return EvmStatus::Ok(format!(
-                "chain {}, block {}, gaps {}",
-                chain_id,
-                head_block,
-                x.to_string(),
-            ));
-        }
-    }
     if head_block == 0 {
         return EvmStatus::Warn(format!("chain {}, zero head block", chain_id));
     }

@@ -41,19 +41,18 @@ Example of such file:
 ```
 # arbitrum
 https://arbitrum.xdaichain.com/
-# rsk, nosync, nogaps
+# rsk, nosync
 https://public-node.rsk.co
-# rsk, nosync, nogaps
+# rsk, nosync
 https://mainnet.sovryn.app/rpc
-# rsk, nosync, nogaps, testnet
+# rsk, nosync, testnet
 https://public-node.testnet.rsk.co
-# avalanche, nosync, nogaps
+# avalanche, nosync
 https://api.avax.network/ext/bc/C/rpc
 ```
 
 Special tags can be included
 - `nosync` - means `eth_syncing` to check status of the sync
-- `nogaps` - means there will be no request `parity_chainStatus` to check gaps in the blocks
 
 Check state of all networks:
 ```
@@ -72,8 +71,9 @@ chainstate -n networks.txt -t rsk,-testnet
 
 ### Healthy node selection
 
-To get working JSON+RPC endpoint URLs in plain text format (one URL - one line), 
-the same principle as getting multiple nodes state is applied, with `--endpoints` flag in addition.
+To get working JSON+RPC endpoint URLs in plain text format (one URL - one line),
+the same principle as getting multiple nodes state is applied, 
+with `--endpoints` flag in addition.
 
 ```
 chainstate -n networks.txt -t rsk,-testnet --endpoints
